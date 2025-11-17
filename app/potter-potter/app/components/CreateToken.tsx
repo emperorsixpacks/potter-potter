@@ -38,7 +38,7 @@ export function CreateToken() {
         new anchor.BN(10).pow(new anchor.BN(decimals)),
       );
       setDisplayRawSupply(raw.toString());
-      setRawSupplyExceedsU64Max(raw.toBigInt() > U64_MAX);
+      setRawSupplyExceedsU64Max(false);
     } catch {
       setDisplayRawSupply("Invalid input");
       setRawSupplyExceedsU64Max(true);
@@ -109,12 +109,15 @@ export function CreateToken() {
       const ata = getAssociatedTokenAddressSync(mint.publicKey, publicKey);
 
       const rawSupply = new anchor.BN(totalSupply).mul(
-        new anchor.BN(10).pow(new anchor.BN(decimals)),
+        new anchor.BN(1).pow(new anchor.BN(decimals)),
       );
 
       const signers = [mint];
 
-      console.log("PublicKey before RPC:", publicKey ? publicKey.toBase58() : "undefined");
+      console.log(
+        "PublicKey before RPC:",
+        publicKey ? publicKey.toBase58() : "undefined",
+      );
       console.log("Mint signer:", mint.publicKey.toBase58());
 
       // --- SEND TX ---
@@ -230,7 +233,8 @@ export function CreateToken() {
           </p>
           {rawSupplyExceedsU64Max && (
             <p className="text-xs text-red-400 mt-1">
-              Warning: Raw supply exceeds maximum allowed for u64 and will cause an error on-chain. Please reduce total supply or decimals.
+              Warning: Raw supply exceeds maximum allowed for u64 and will cause
+              an error on-chain. Please reduce total supply or decimals.
             </p>
           )}
         </div>
@@ -277,7 +281,9 @@ export function CreateToken() {
         <button
           type="submit"
           className="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={isLoading || !program || !publicKey || rawSupplyExceedsU64Max}
+          disabled={
+            isLoading || !program || !publicKey || rawSupplyExceedsU64Max
+          }
         >
           {isLoading
             ? "Creating..."

@@ -4,6 +4,11 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{
     burn, mint_to, transfer, Burn, Mint, MintTo, Token, TokenAccount, Transfer,
 };
+use mpl_token_metadata::instructions::CreateMetadataAccountV3Cpi;
+use mpl_token_metadata::instructions::CreateMetadataAccountV3CpiAccounts;
+use mpl_token_metadata::instructions::CreateMetadataAccountV3InstructionArgs;
+use mpl_token_metadata::types::DataV2;
+use mpl_token_metadata::ID as METADATA_PROGRAM_ID;
 
 pub mod errors {
     use anchor_lang::prelude::*;
@@ -84,10 +89,47 @@ pub mod potter_potter {
             ctx.accounts.associated_token_program.to_account_info(),
             cpi_accounts,
         ))?;
+        let args = CreateMetadataAccountV3InstructionArgs {
+            data: DataV2 {
+                name: name.clone(),
+                symbol: symbol.clone(),
+                uri: uri.clone(),
+                seller_fee_basis_points: 0,
+                creators: None,
+                collection: None,
+                uses: None,
+            },
+            is_mutable: false,
+            collection_details: None,
+        };
 
-        // Mint initial supply to the ATA
-        // total_supply is ALREADY in raw format (human_amount * 10^decimals)
+        let token_metadata_program_ai = ctx.accounts.token_metadata_program.to_account_info();
+        let metadata_ai = ctx.accounts.metadata.to_account_info();
+        let mint_ai = ctx.accounts.mint.to_account_info();
+        let authority_ai = ctx.accounts.authority.to_account_info();
+        let system_program_ai = ctx.accounts.system_program.to_account_info();
+        let rent_ai = ctx.accounts.rent.to_account_info();
+
+        let cpi = CreateMetadataAccountV3Cpi::new(
+            &token_metadata_program_ai,
+            CreateMetadataAccountV3CpiAccounts {
+                metadata: &metadata_ai,
+                mint: &mint_ai,
+                mint_authority: &authority_ai,
+                payer: &authority_ai,
+                update_authority: (&authority_ai, true),
+                system_program: &system_program_ai,
+                rent: Some(&rent_ai),
+            },
+            args,
+        );
+
+        cpi.invoke()?;
+
         if total_supply > 0 {
+            let raw_supply = total_supply
+                .checked_mul(10u64.pow(decimals as u32))
+                .ok_or(ErrorCode::InvalidAmount)?;
             mint_to(
                 CpiContext::new(
                     ctx.accounts.token_program.to_account_info(),
@@ -97,7 +139,7 @@ pub mod potter_potter {
                         authority: ctx.accounts.authority.to_account_info(),
                     },
                 ),
-                total_supply, // Use total_supply directly, don't multiply again
+                raw_supply,
             )?;
         }
 
@@ -272,12 +314,21 @@ pub struct CreateTokenCTX<'info> {
     )]
     pub mint: Account<'info, Mint>,
 
-    /// CHECK: Created via CPI
+    /// CHECK: This is created via CPI to the associated token program and validated by the SPL token program.
     #[account(mut)]
     pub ata: UncheckedAccount<'info>,
 
-    /// CHECK: Created via Metaplex CPI
-    #[account(mut)]
+    /// CHECK: The metadata account is validated by the token metadata program.
+    #[account(
+    mut,
+    seeds = [
+        b"metadata",
+        METADATA_PROGRAM_ID.as_ref(),
+        mint.key().as_ref()
+    ],
+    bump,
+    seeds::program = METADATA_PROGRAM_ID
+)]
     pub metadata: UncheckedAccount<'info>,
 
     #[account(
