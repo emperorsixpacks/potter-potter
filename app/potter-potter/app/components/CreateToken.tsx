@@ -1,96 +1,96 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import * as anchor from "@coral-xyz/anchor";
-import { Keypair, PublicKey } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { PublicKey, Keypair } from "@solana/web3.js";
+import {
+  getAssociatedTokenAddressSync,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useAnchorProgram } from "../lib/useAnchorProgram";
 
 export function CreateToken() {
   const { program } = useAnchorProgram();
   const { publicKey } = useWallet();
+
   const [totalSupply, setTotalSupply] = useState(1000);
   const [decimals, setDecimals] = useState(9);
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [uri, setUri] = useState("");
   const [defaultAddress, setDefaultAddress] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  const [displayRawSupply, setDisplayRawSupply] = useState("0");
 
-  const createToken = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!program || !publicKey) {
-      setError("Program or wallet not initialized");
-      return;
-    }
+  const METADATA_PROGRAM_ID = new PublicKey(
+    "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+  );
 
-    // Validate default address
+  useEffect(() => {
     try {
-      new PublicKey(defaultAddress);
-    } catch (e) {
-      setError("Invalid Default Whitelisted Address");
-      return;
+      const raw = new anchor.BN(totalSupply).mul(
+        new anchor.BN(10).pow(new anchor.BN(decimals)),
+      );
+      setDisplayRawSupply(raw.toString());
+    } catch {
+      setDisplayRawSupply("Invalid input");
+    }
+  }, [totalSupply, decimals]);
+
+  const createToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!program || !publicKey) return;
+
+    // Validate whitelist
+    let defaultPk: PublicKey;
+    try {
+      defaultPk = new PublicKey(defaultAddress);
+    } catch {
+      return setError("Invalid default whitelist address");
     }
 
-    setIsLoading(true);
     setError(null);
     setSignature(null);
+    setIsLoading(true);
 
     try {
-      console.log("=== Starting Token Creation ===");
-      console.log("Program ID:", program.programId.toBase58());
-      console.log("Authority:", publicKey.toBase58());
+      console.log("=== START ===");
 
+      // --- MINT ---
       const mint = Keypair.generate();
-      console.log("Generated Mint:", mint.publicKey.toBase58());
 
+      // --- FACTORY ---
       const [factory] = PublicKey.findProgramAddressSync(
         [Buffer.from("factory"), publicKey.toBuffer()],
         program.programId,
       );
-      console.log("Factory PDA:", factory.toBase58());
 
-      // Fetch factory account
-      let factoryAccount;
-      try {
-        factoryAccount = await program.account.tokenFactory.fetch(factory);
-        console.log(
-          "Factory Token Count:",
-          factoryAccount.tokenCount.toString(),
-        );
-      } catch (e) {
-        setError(
-          "Factory account not found. Please create a factory first by calling create_factory.",
-        );
-        setIsLoading(false);
-        return;
-      }
+      const factoryAcc = await program.account.tokenFactory.fetch(factory);
 
+      // --- TOKEN DATA PDA ---
       const [tokenData] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("token"),
           publicKey.toBuffer(),
-          new anchor.BN(factoryAccount.tokenCount).toBuffer("le", 8),
+          new anchor.BN(factoryAcc.tokenCount).toBuffer("le", 8),
         ],
         program.programId,
       );
-      console.log("Token Data PDA:", tokenData.toBase58());
 
+      // --- WHITELIST PDA ---
       const [whitelist] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("whitelist"),
           publicKey.toBuffer(),
-          new anchor.BN(factoryAccount.tokenCount).toBuffer("le", 8),
+          new anchor.BN(factoryAcc.tokenCount).toBuffer("le", 8),
         ],
         program.programId,
       );
-      console.log("Whitelist PDA:", whitelist.toBase58());
 
-      const METADATA_PROGRAM_ID = new PublicKey(
-        "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
-      );
-
+      // --- METADATA PDA ---
       const [metadata] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("metadata"),
@@ -99,117 +99,43 @@ export function CreateToken() {
         ],
         METADATA_PROGRAM_ID,
       );
-      console.log("Metadata PDA:", metadata.toBase58());
 
-      const supplyWithDecimals = new anchor.BN(totalSupply).mul(
+      // --- ASSOCIATED TOKEN ACCOUNT ---
+      const ata = getAssociatedTokenAddressSync(mint.publicKey, publicKey);
+
+      const rawSupply = new anchor.BN(totalSupply).mul(
         new anchor.BN(10).pow(new anchor.BN(decimals)),
       );
-      console.log(
-        "Total Supply (with decimals):",
-        supplyWithDecimals.toString(),
-      );
 
-      const recipientTokenAccount = getAssociatedTokenAddressSync(
-        mint.publicKey,
-        publicKey,
-      );
-      console.log("Recipient Token Account:", recipientTokenAccount.toBase58());
+      const signers = [mint];
+      if (publicKey) {
+        signers.push(publicKey);
+      }
 
-      console.log("\n=== Building Transaction ===");
-      // CRITICAL: Account order MUST match CreateTokenCTX in Rust EXACTLY
-      // Order: factory, tokenData, whitelist, mint, metadata, authority,
-      //        recipientTokenAccount, systemProgram, tokenProgram,
-      //        associatedTokenProgram, rent, tokenMetadataProgram
-
-      // Use the exact addresses you provided
-      const SYSTEM_PROGRAM = new PublicKey("11111111111111111111111111111111");
-      const TOKEN_PROGRAM = new PublicKey(
-        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-      );
-      const RENT_SYSVAR = new PublicKey(
-        "SysvarRent111111111111111111111111111111111",
-      );
-      const METADATA_PROGRAM = new PublicKey(
-        "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
-      );
-
-      // Your accounts object matching Rust order
-      const accounts = {
-        factory, // Account<TokenFactory>
-        tokenData, // Account<TokenData>
-        whitelist, // Account<Whitelist>
-        mint: mint.publicKey, // Account<Mint>
-        metadata, // UncheckedAccount
-        authority: publicKey, // Signer
-        recipientTokenAccount, // UncheckedAccount
-        systemProgram: SYSTEM_PROGRAM, // PublicKey
-        tokenProgram: TOKEN_PROGRAM, // PublicKey
-        associatedTokenProgram: new PublicKey(
-          "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-        ), // official SPL Associated Token Program
-        rent: RENT_SYSVAR, // PublicKey
-        tokenMetadataProgram: METADATA_PROGRAM, // PublicKey
-      };
-      console.log(
-        "Accounts:",
-        JSON.stringify(
-          {
-            factory: accounts.factory.toBase58(),
-            tokenData: accounts.tokenData.toBase58(),
-            whitelist: accounts.whitelist.toBase58(),
-            mint: accounts.mint.toBase58(),
-            metadata: accounts.metadata.toBase58(),
-            authority: accounts.authority.toBase58(),
-            recipientTokenAccount: accounts.recipientTokenAccount.toBase58(),
-            systemProgram: accounts.systemProgram.toBase58(),
-            tokenProgram: accounts.tokenProgram.toBase58(),
-            associatedTokenProgram: accounts.associatedTokenProgram.toBase58(),
-            rent: accounts.rent.toBase58(),
-            tokenMetadataProgram: accounts.tokenMetadataProgram.toBase58(),
-          },
-          null,
-          2,
-        ),
-      );
-
-      console.log("\n=== Sending Transaction ===");
+      // --- SEND TX ---
       const tx = await program.methods
-        .createToken(
-          supplyWithDecimals,
-          decimals,
-          name,
-          symbol,
-          uri,
-          new PublicKey(defaultAddress),
-        )
-        .accounts(accounts)
-        .signers([mint])
-        .rpc({ skipPreflight: false });
+        .createToken(rawSupply, decimals, name, symbol, uri, defaultPk)
+        .accounts({
+          factory,
+          tokenData,
+          whitelist,
+          mint: mint.publicKey,
+          metadata,
+          ata,
+          authority: publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenMetadataProgram: METADATA_PROGRAM_ID,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        })
+        .signers(signers)
+        .rpc();
 
-      console.log("Transaction Signature:", tx);
       setSignature(tx);
-    } catch (e: any) {
-      console.error("=== Error Details ===");
-      console.error("Error:", e);
-      console.error("Error Message:", e.message);
-
-      if (e.logs) {
-        console.error("Transaction Logs:", e.logs);
-      }
-
-      // More user-friendly error messages
-      let errorMessage = e.message;
-
-      if (e.message.includes("AccountNotInitialized")) {
-        errorMessage =
-          "Account not initialized. This might be a program deployment issue.";
-      } else if (e.message.includes("factory")) {
-        errorMessage = "Factory not found. Please create a factory first.";
-      } else if (e.message.includes("insufficient funds")) {
-        errorMessage = "Insufficient SOL balance to complete transaction.";
-      }
-
-      setError(errorMessage);
+    } catch (err: any) {
+      console.log(err);
+      setError(err.message || "Transaction failed");
     } finally {
       setIsLoading(false);
     }
@@ -278,7 +204,7 @@ export function CreateToken() {
             htmlFor="totalSupply"
             className="block text-sm font-medium text-gray-300"
           >
-            Total Supply
+            Total Supply (Human-Readable)
           </label>
           <input
             type="number"
@@ -289,6 +215,9 @@ export function CreateToken() {
             required
             min="1"
           />
+          <p className="text-xs text-gray-400 mt-1">
+            Raw Supply (for program): {displayRawSupply}
+          </p>
         </div>
         <div className="mb-4">
           <label

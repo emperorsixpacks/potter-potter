@@ -1,10 +1,24 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{burn, mint_to, transfer, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::associated_token;
 use anchor_spl::associated_token::AssociatedToken;
-use mpl_token_metadata::instructions::{CreateMetadataAccountV3, CreateMetadataAccountV3InstructionArgs};
-use mpl_token_metadata::types::DataV2;
+use anchor_spl::token::{
+    burn, mint_to, transfer, Burn, Mint, MintTo, Token, TokenAccount, Transfer,
+};
 
-pub mod errors;
+pub mod errors {
+    use anchor_lang::prelude::*;
+    #[error_code]
+    pub enum ErrorCode {
+        #[msg("Invalid amount or length")]
+        InvalidAmount,
+        #[msg("Token is paused")]
+        TokenPaused,
+        #[msg("Minting is paused")]
+        MintingPaused,
+        #[msg("Address not whitelisted")]
+        AddressNotWhitelisted,
+    }
+}
 use errors::ErrorCode;
 
 declare_id!("A3jca3XyW52j1aMdpE75affvCtgyN4UwNc1Sn2ahLzo6");
@@ -12,7 +26,6 @@ declare_id!("A3jca3XyW52j1aMdpE75affvCtgyN4UwNc1Sn2ahLzo6");
 #[program]
 pub mod potter_potter {
     use super::*;
-    use anchor_lang::solana_program::program::invoke;
 
     pub fn create_factory(ctx: Context<CreateFactoryCTX>) -> Result<()> {
         ctx.accounts.factory.set_inner(TokenFactory {
@@ -38,6 +51,7 @@ pub mod potter_potter {
         let factory = &mut ctx.accounts.factory;
         let token_count = factory.token_count;
 
+        // Initialize token data
         ctx.accounts.token_data.set_inner(TokenData {
             mint: ctx.accounts.mint.key(),
             authority: factory.authority,
@@ -51,89 +65,45 @@ pub mod potter_potter {
             whitelist: ctx.accounts.whitelist.key(),
         });
 
+        // Initialize whitelist
         ctx.accounts.whitelist.set_inner(Whitelist {
             addresses: vec![default_address],
         });
 
         factory.token_count = token_count.checked_add(1).unwrap();
 
-        // Create metadata account using Metaplex
-        let data_v2 = DataV2 {
-            name,
-            symbol,
-            uri,
-            seller_fee_basis_points: 0,
-            creators: None,
-            collection: None,
-            uses: None,
+        // Create associated token account for the authority
+        let cpi_accounts = associated_token::Create {
+            payer: ctx.accounts.authority.to_account_info(),
+            associated_token: ctx.accounts.ata.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            token_program: ctx.accounts.token_program.to_account_info(),
         };
+        associated_token::create(CpiContext::new(
+            ctx.accounts.associated_token_program.to_account_info(),
+            cpi_accounts,
+        ))?;
 
-        let create_metadata_accounts_v3_ix = CreateMetadataAccountV3 {
-            metadata: ctx.accounts.metadata.key(),
-            mint: ctx.accounts.mint.key(),
-            mint_authority: ctx.accounts.authority.key(),
-            payer: ctx.accounts.authority.key(),
-            update_authority: (ctx.accounts.authority.key(), true),
-            system_program: ctx.accounts.system_program.key(),
-            rent: Some(ctx.accounts.rent.key()),
-        };
-
-        let instruction = create_metadata_accounts_v3_ix.instruction(
-            CreateMetadataAccountV3InstructionArgs {
-                data: data_v2,
-                is_mutable: true,
-                collection_details: None,
-            }
-        );
-
-        invoke(
-            &instruction,
-            &[
-                ctx.accounts.metadata.to_account_info(),
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.authority.to_account_info(),
-                ctx.accounts.authority.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-                ctx.accounts.rent.to_account_info(),
-            ],
-        )?;
-
-        // Create the associated token account manually
-        let create_ata_ix = anchor_spl::associated_token::spl_associated_token_account::instruction::create_associated_token_account(
-            &ctx.accounts.authority.key(),
-            &ctx.accounts.authority.key(),
-            &ctx.accounts.mint.key(),
-            &ctx.accounts.token_program.key(),
-        );
-
-        invoke(
-            &create_ata_ix,
-            &[
-                ctx.accounts.authority.to_account_info(),
-                ctx.accounts.recipient_token_account.to_account_info(),
-                ctx.accounts.authority.to_account_info(),
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-            ],
-        )?;
-
-        // Mint initial supply to the recipient token account
+        // Mint initial supply to the ATA
         if total_supply > 0 {
+            let raw_supply = total_supply
+                .checked_mul(10u64.pow(decimals as u32))
+                .unwrap();
             mint_to(
                 CpiContext::new(
                     ctx.accounts.token_program.to_account_info(),
                     MintTo {
                         mint: ctx.accounts.mint.to_account_info(),
-                        to: ctx.accounts.recipient_token_account.to_account_info(),
+                        to: ctx.accounts.ata.to_account_info(),
                         authority: ctx.accounts.authority.to_account_info(),
                     },
                 ),
-                total_supply,
+                raw_supply,
             )?;
-            msg!("Minted {} tokens to recipient", total_supply);
         }
-        
+
         Ok(())
     }
 
@@ -156,6 +126,8 @@ pub mod potter_potter {
     pub fn transfer_token(ctx: Context<TransferCTX>, _token_count: u64, amount: u64) -> Result<()> {
         require!(!ctx.accounts.token_data.is_paused, ErrorCode::TokenPaused);
         require!(amount > 0, ErrorCode::InvalidAmount);
+
+        // whitelist check: ensure recipient owner is whitelisted
         require!(
             ctx.accounts
                 .whitelist
@@ -163,6 +135,8 @@ pub mod potter_potter {
                 .contains(&ctx.accounts.to.owner),
             ErrorCode::AddressNotWhitelisted
         );
+
+        msg!("Transferring {} tokens", amount);
 
         transfer(
             CpiContext::new(
@@ -177,6 +151,7 @@ pub mod potter_potter {
         )?;
 
         msg!("Transferred {} tokens", amount);
+
         Ok(())
     }
 
@@ -231,6 +206,11 @@ pub mod potter_potter {
 
     pub fn pause_minting(ctx: Context<PauseMintingCTX>, _token_count: u64) -> Result<()> {
         ctx.accounts.token_data.is_minting_paused = !ctx.accounts.token_data.is_minting_paused;
+        Ok(())
+    }
+
+    pub fn pause_token(ctx: Context<PauseTokenCTX>, _token_count: u64) -> Result<()> {
+        ctx.accounts.token_data.is_paused = !ctx.accounts.token_data.is_paused;
         Ok(())
     }
 }
@@ -295,25 +275,27 @@ pub struct CreateTokenCTX<'info> {
     )]
     pub mint: Account<'info, Mint>,
 
-    /// CHECK: We're about to create this with Metaplex
+    /// CHECK: Created via CPI
+    #[account(mut)]
+    pub ata: UncheckedAccount<'info>,
+
+    /// CHECK: Created via Metaplex CPI
     #[account(mut)]
     pub metadata: UncheckedAccount<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        address = factory.authority
+    )]
     pub authority: Signer<'info>,
-    
-    /// CHECK: This will be created via CPI to associated token program
-    #[account(mut)]
-    pub recipient_token_account: UncheckedAccount<'info>,
-    
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     #[account(address = anchor_spl::associated_token::ID)]
     pub associated_token_program: Program<'info, AssociatedToken>,
-    #[account(address = anchor_lang::solana_program::sysvar::rent::ID)]
     pub rent: Sysvar<'info, Rent>,
-    /// CHECK: This is the Metaplex token metadata program
-    #[account(address = mpl_token_metadata::ID)]
+
+    /// CHECK: Token Metadata Program
     pub token_metadata_program: UncheckedAccount<'info>,
 }
 
@@ -393,10 +375,16 @@ pub struct TransferCTX<'info> {
     #[account(address = token_data.whitelist)]
     pub whitelist: Account<'info, Whitelist>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = from.mint == token_data.mint
+    )]
     pub from: Account<'info, TokenAccount>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = to.mint == token_data.mint
+    )]
     pub to: Account<'info, TokenAccount>,
 
     pub authority: Signer<'info>,
@@ -414,10 +402,16 @@ pub struct MintTokensCTX<'info> {
     )]
     pub token_data: Account<'info, TokenData>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = mint.key() == token_data.mint
+    )]
     pub mint: Account<'info, Mint>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = to.mint == token_data.mint
+    )]
     pub to: Account<'info, TokenAccount>,
 
     pub authority: Signer<'info>,
@@ -435,10 +429,16 @@ pub struct BurnTokensCTX<'info> {
     )]
     pub token_data: Account<'info, TokenData>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = mint.key() == token_data.mint
+    )]
     pub mint: Account<'info, Mint>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = from.mint == token_data.mint
+    )]
     pub from: Account<'info, TokenAccount>,
 
     pub authority: Signer<'info>,
@@ -448,6 +448,19 @@ pub struct BurnTokensCTX<'info> {
 #[derive(Accounts)]
 #[instruction(token_count: u64)]
 pub struct PauseMintingCTX<'info> {
+    #[account(
+        mut,
+        seeds = [b"token", authority.key().as_ref(), &token_count.to_le_bytes()],
+        bump,
+        has_one = authority
+    )]
+    pub token_data: Account<'info, TokenData>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(token_count: u64)]
+pub struct PauseTokenCTX<'info> {
     #[account(
         mut,
         seeds = [b"token", authority.key().as_ref(), &token_count.to_le_bytes()],

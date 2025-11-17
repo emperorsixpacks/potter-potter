@@ -1,0 +1,748 @@
+{
+  "accounts": [
+    {
+      "discriminator": [
+        10,
+        136,
+        199,
+        13,
+        59,
+        103,
+        129,
+        70
+      ],
+      "name": "TokenData"
+    },
+    {
+      "discriminator": [
+        141,
+        137,
+        182,
+        40,
+        200,
+        4,
+        141,
+        180
+      ],
+      "name": "TokenFactory"
+    },
+    {
+      "discriminator": [
+        204,
+        176,
+        52,
+        79,
+        146,
+        121,
+        54,
+        247
+      ],
+      "name": "Whitelist"
+    }
+  ],
+  "address": "A3jca3XyW52j1aMdpE75affvCtgyN4UwNc1Sn2ahLzo6",
+  "errors": [
+    {
+      "code": 6000,
+      "msg": "Invalid amount or length",
+      "name": "InvalidAmount"
+    },
+    {
+      "code": 6001,
+      "msg": "Token is paused",
+      "name": "TokenPaused"
+    },
+    {
+      "code": 6002,
+      "msg": "Minting is paused",
+      "name": "MintingPaused"
+    },
+    {
+      "code": 6003,
+      "msg": "Address not whitelisted",
+      "name": "AddressNotWhitelisted"
+    }
+  ],
+  "instructions": [
+    {
+      "accounts": [
+        {
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "whitelist",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "token_data"
+          ],
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        },
+        {
+          "name": "addresses",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ],
+      "discriminator": [
+        157,
+        211,
+        52,
+        54,
+        144,
+        81,
+        5,
+        55
+      ],
+      "name": "add_to_whitelist"
+    },
+    {
+      "accounts": [
+        {
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "from",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "token_data"
+          ],
+          "signer": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        76,
+        15,
+        51,
+        254,
+        229,
+        215,
+        121,
+        66
+      ],
+      "name": "burn_tokens"
+    },
+    {
+      "accounts": [
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        }
+      ],
+      "args": [],
+      "discriminator": [
+        11,
+        88,
+        70,
+        244,
+        56,
+        177,
+        41,
+        170
+      ],
+      "name": "create_factory"
+    },
+    {
+      "accounts": [
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "account": "TokenFactory",
+                "kind": "account",
+                "path": "factory.token_count"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "whitelist",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  104,
+                  105,
+                  116,
+                  101,
+                  108,
+                  105,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "account": "TokenFactory",
+                "kind": "account",
+                "path": "factory.token_count"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "ata",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "factory"
+          ],
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
+        },
+        {
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+          "name": "associated_token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "total_supply",
+          "type": "u64"
+        },
+        {
+          "name": "decimals",
+          "type": "u8"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "type": "string"
+        },
+        {
+          "name": "default_address",
+          "type": "pubkey"
+        }
+      ],
+      "discriminator": [
+        84,
+        52,
+        204,
+        228,
+        24,
+        140,
+        234,
+        75
+      ],
+      "docs": [
+        "Create a new fungible SPL token under the factory.",
+        "- creates the mint",
+        "- creates the destination ATA for the authority (recipient)",
+        "- mints initial supply to the recipient ATA"
+      ],
+      "name": "create_token"
+    },
+    {
+      "accounts": [
+        {
+          "name": "authority"
+        },
+        {
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          }
+        },
+        {
+          "name": "whitelist"
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        238,
+        41,
+        81,
+        238,
+        36,
+        35,
+        212,
+        142
+      ],
+      "name": "get_whitelist"
+    },
+    {
+      "accounts": [
+        {
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "to",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "token_data"
+          ],
+          "signer": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        59,
+        132,
+        24,
+        246,
+        122,
+        39,
+        8,
+        243
+      ],
+      "name": "mint_tokens"
+    },
+    {
+      "accounts": [
+        {
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "token_data"
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        15,
+        247,
+        181,
+        3,
+        81,
+        145,
+        229,
+        68
+      ],
+      "name": "pause_minting"
+    },
+    {
+      "accounts": [
+        {
+          "name": "factory_authority"
+        },
+        {
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "factory_authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          }
+        },
+        {
+          "name": "whitelist"
+        },
+        {
+          "name": "from",
+          "writable": true
+        },
+        {
+          "name": "to",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        219,
+        17,
+        122,
+        53,
+        237,
+        171,
+        232,
+        222
+      ],
+      "name": "transfer_token"
+    }
+  ],
+  "metadata": {
+    "description": "Created with Anchor",
+    "name": "potter_potter",
+    "spec": "0.1.0",
+    "version": "0.1.0"
+  },
+  "types": [
+    {
+      "name": "TokenData",
+      "type": {
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_supply",
+            "type": "u64"
+          },
+          {
+            "name": "decimals",
+            "type": "u8"
+          },
+          {
+            "name": "is_paused",
+            "type": "bool"
+          },
+          {
+            "name": "is_minting_paused",
+            "type": "bool"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          },
+          {
+            "name": "whitelist",
+            "type": "pubkey"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "TokenFactory",
+      "type": {
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_count",
+            "type": "u64"
+          }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "Whitelist",
+      "type": {
+        "fields": [
+          {
+            "name": "addresses",
+            "type": {
+              "vec": "pubkey"
+            }
+          }
+        ],
+        "kind": "struct"
+      }
+    }
+  ]
+}

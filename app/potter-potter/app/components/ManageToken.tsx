@@ -32,6 +32,22 @@ export function ManageToken({
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
 
+  // Helper function to convert human-readable amount to raw amount (BN)
+  const toRawAmount = (humanAmount: number, decimals: number): anchor.BN => {
+    // Scale the human-readable amount by 10^decimals and round to the nearest integer
+    // This handles potential floating point inaccuracies from user input (type="number")
+    const scaledAmount = Math.round(humanAmount * Math.pow(10, decimals));
+    return new anchor.BN(scaledAmount);
+  };
+
+  // Helper function to convert raw amount (BN) to human-readable amount (number)
+  const toHumanAmount = (rawAmount: anchor.BN, decimals: number): number => {
+    const divisor = Math.pow(10, decimals);
+    // Perform division and convert to number for display
+    // rawAmount is an anchor.BN, so we need to convert it to a number for division
+    return rawAmount.toNumber() / divisor;
+  };
+
   const getWhitelist = async () => {
     if (!program) return;
     setIsLoading(true);
@@ -162,9 +178,7 @@ export function ManageToken({
       const toAccount = await getOrCreateAssociatedTokenAccount(publicKey!);
       
       // Convert amount with decimals
-      const amountWithDecimals = new anchor.BN(amountToMint).mul(
-        new anchor.BN(10).pow(new anchor.BN(token.decimals))
-      );
+      const amountWithDecimals = toRawAmount(amountToMint, token.decimals);
 
       return program.methods
         .mintTokens(
@@ -186,9 +200,7 @@ export function ManageToken({
       const fromAccount = await getOrCreateAssociatedTokenAccount(publicKey!);
       
       // Convert amount with decimals
-      const amountWithDecimals = new anchor.BN(amountToBurn).mul(
-        new anchor.BN(10).pow(new anchor.BN(token.decimals))
-      );
+      const amountWithDecimals = toRawAmount(amountToBurn, token.decimals);
 
       return program.methods
         .burnTokens(
@@ -213,9 +225,7 @@ export function ManageToken({
       );
       
       // Convert amount with decimals
-      const amountWithDecimals = new anchor.BN(amountToTransfer).mul(
-        new anchor.BN(10).pow(new anchor.BN(token.decimals))
-      );
+      const amountWithDecimals = toRawAmount(amountToTransfer, token.decimals);
 
       return program.methods
         .transferToken(
@@ -281,7 +291,7 @@ export function ManageToken({
           <strong>Decimals:</strong> {token.decimals}
         </p>
         <p className="text-gray-300 text-sm">
-          <strong>Total Supply:</strong> {(token.total_supply / Math.pow(10, token.decimals)).toLocaleString()}
+          <strong>Total Supply:</strong> {token.total_supply ? toHumanAmount(token.total_supply, token.decimals).toLocaleString() : "Loading..."}
         </p>
         <p className="text-gray-300 text-sm">
           <strong>Minting:</strong> {token.is_minting_paused ? "Paused" : "Active"}
