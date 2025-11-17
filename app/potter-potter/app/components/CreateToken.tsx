@@ -24,10 +24,13 @@ export function CreateToken() {
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [displayRawSupply, setDisplayRawSupply] = useState("0");
+  const [rawSupplyExceedsU64Max, setRawSupplyExceedsU64Max] = useState(false);
 
   const METADATA_PROGRAM_ID = new PublicKey(
     "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
   );
+
+  const U64_MAX = BigInt("18446744073709551615"); // 2^64 - 1
 
   useEffect(() => {
     try {
@@ -35,8 +38,10 @@ export function CreateToken() {
         new anchor.BN(10).pow(new anchor.BN(decimals)),
       );
       setDisplayRawSupply(raw.toString());
+      setRawSupplyExceedsU64Max(raw.toBigInt() > U64_MAX);
     } catch {
       setDisplayRawSupply("Invalid input");
+      setRawSupplyExceedsU64Max(true);
     }
   }, [totalSupply, decimals]);
 
@@ -211,13 +216,23 @@ export function CreateToken() {
             id="totalSupply"
             className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             value={totalSupply}
-            onChange={(e) => setTotalSupply(Number(e.target.value))}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (!isNaN(value)) {
+                setTotalSupply(value);
+              }
+            }}
             required
             min="1"
           />
           <p className="text-xs text-gray-400 mt-1">
             Raw Supply (for program): {displayRawSupply}
           </p>
+          {rawSupplyExceedsU64Max && (
+            <p className="text-xs text-red-400 mt-1">
+              Warning: Raw supply exceeds maximum allowed for u64 and will cause an error on-chain. Please reduce total supply or decimals.
+            </p>
+          )}
         </div>
         <div className="mb-4">
           <label
@@ -231,7 +246,12 @@ export function CreateToken() {
             id="decimals"
             className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             value={decimals}
-            onChange={(e) => setDecimals(Number(e.target.value))}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (!isNaN(value)) {
+                setDecimals(value);
+              }
+            }}
             required
             min="0"
             max="9"
@@ -257,7 +277,7 @@ export function CreateToken() {
         <button
           type="submit"
           className="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={isLoading || !program || !publicKey}
+          disabled={isLoading || !program || !publicKey || rawSupplyExceedsU64Max}
         >
           {isLoading
             ? "Creating..."
