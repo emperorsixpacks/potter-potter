@@ -34,7 +34,6 @@ pub mod potter_potter {
         });
         Ok(())
     }
-
     pub fn create_token(
         ctx: Context<CreateTokenCTX>,
         total_supply: u64,
@@ -87,10 +86,8 @@ pub mod potter_potter {
         ))?;
 
         // Mint initial supply to the ATA
+        // total_supply is ALREADY in raw format (human_amount * 10^decimals)
         if total_supply > 0 {
-            let raw_supply = total_supply
-                .checked_mul(10u64.pow(decimals as u32))
-                .unwrap();
             mint_to(
                 CpiContext::new(
                     ctx.accounts.token_program.to_account_info(),
@@ -100,7 +97,7 @@ pub mod potter_potter {
                         authority: ctx.accounts.authority.to_account_info(),
                     },
                 ),
-                raw_supply,
+                total_supply, // Use total_supply directly, don't multiply again
             )?;
         }
 

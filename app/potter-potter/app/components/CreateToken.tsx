@@ -108,9 +108,9 @@ export function CreateToken() {
       );
 
       const signers = [mint];
-      if (publicKey) {
-        signers.push(publicKey);
-      }
+
+      console.log("PublicKey before RPC:", publicKey ? publicKey.toBase58() : "undefined");
+      console.log("Mint signer:", mint.publicKey.toBase58());
 
       // --- SEND TX ---
       const tx = await program.methods
