@@ -77,6 +77,7 @@ pub mod potter_potter {
         factory.token_count = token_count.checked_add(1).unwrap();
 
         // Create associated token account for the authority
+        msg!("ATA account address before creation: {}", ctx.accounts.ata.key());
         let cpi_accounts = associated_token::Create {
             payer: ctx.accounts.authority.to_account_info(),
             associated_token: ctx.accounts.ata.to_account_info(),
@@ -89,6 +90,8 @@ pub mod potter_potter {
             ctx.accounts.associated_token_program.to_account_info(),
             cpi_accounts,
         ))?;
+        msg!("Associated Token Account created successfully at: {}", ctx.accounts.ata.key());
+
         let args = CreateMetadataAccountV3InstructionArgs {
             data: DataV2 {
                 name: name.clone(),
@@ -127,9 +130,17 @@ pub mod potter_potter {
         cpi.invoke()?;
 
         if total_supply > 0 {
+            msg!("Attempting to mint tokens.");
+            msg!("Total Supply: {}", total_supply);
+            msg!("Decimals: {}", decimals);
+
             let raw_supply = total_supply
                 .checked_mul(10u64.pow(decimals as u32))
                 .ok_or(ErrorCode::InvalidAmount)?;
+            
+            msg!("Raw Supply: {}", raw_supply);
+            msg!("Minting to ATA address: {}", ctx.accounts.ata.key());
+
             mint_to(
                 CpiContext::new(
                     ctx.accounts.token_program.to_account_info(),
@@ -141,6 +152,9 @@ pub mod potter_potter {
                 ),
                 raw_supply,
             )?;
+            msg!("Tokens minted successfully.");
+        } else {
+            msg!("Total supply is 0, skipping minting.");
         }
 
         Ok(())
