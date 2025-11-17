@@ -9,21 +9,8 @@ use mpl_token_metadata::instructions::CreateMetadataAccountV3CpiAccounts;
 use mpl_token_metadata::instructions::CreateMetadataAccountV3InstructionArgs;
 use mpl_token_metadata::types::DataV2;
 use mpl_token_metadata::ID as METADATA_PROGRAM_ID;
+mod errors;
 
-pub mod errors {
-    use anchor_lang::prelude::*;
-    #[error_code]
-    pub enum ErrorCode {
-        #[msg("Invalid amount or length")]
-        InvalidAmount,
-        #[msg("Token is paused")]
-        TokenPaused,
-        #[msg("Minting is paused")]
-        MintingPaused,
-        #[msg("Address not whitelisted")]
-        AddressNotWhitelisted,
-    }
-}
 use errors::ErrorCode;
 
 declare_id!("A3jca3XyW52j1aMdpE75affvCtgyN4UwNc1Sn2ahLzo6");
@@ -42,15 +29,14 @@ pub mod potter_potter {
     pub fn create_token(
         ctx: Context<CreateTokenCTX>,
         total_supply: u64,
-        decimals: u8,
         name: String,
         symbol: String,
         uri: String,
         default_address: Pubkey,
     ) -> Result<()> {
-        require!(name.len() <= 32, ErrorCode::InvalidAmount);
-        require!(symbol.len() <= 10, ErrorCode::InvalidAmount);
-        require!(uri.len() <= 200, ErrorCode::InvalidAmount);
+        //require!(name.len() >= 32, ErrorCode::NameTooLong);
+        //require!(symbol.len() >= 10, ErrorCode::SymbolTooLong);
+        //require!(uri.len() >= 200, ErrorCode::InvalidAmount);
 
         let factory = &mut ctx.accounts.factory;
         let token_count = factory.token_count;
@@ -60,7 +46,7 @@ pub mod potter_potter {
             mint: ctx.accounts.mint.key(),
             authority: factory.authority,
             total_supply,
-            decimals,
+            decimals: 9,
             is_paused: false,
             is_minting_paused: false,
             name: name.clone(),
@@ -77,7 +63,6 @@ pub mod potter_potter {
         factory.token_count = token_count.checked_add(1).unwrap();
 
         // Create associated token account for the authority
-        msg!("ATA account address before creation: {}", ctx.accounts.ata.key());
         let cpi_accounts = associated_token::Create {
             payer: ctx.accounts.authority.to_account_info(),
             associated_token: ctx.accounts.ata.to_account_info(),
@@ -90,8 +75,6 @@ pub mod potter_potter {
             ctx.accounts.associated_token_program.to_account_info(),
             cpi_accounts,
         ))?;
-        msg!("Associated Token Account created successfully at: {}", ctx.accounts.ata.key());
-
         let args = CreateMetadataAccountV3InstructionArgs {
             data: DataV2 {
                 name: name.clone(),
@@ -132,14 +115,13 @@ pub mod potter_potter {
         if total_supply > 0 {
             msg!("Attempting to mint tokens.");
             msg!("Total Supply: {}", total_supply);
-            msg!("Decimals: {}", decimals);
+            msg!("Decimals: {}", ctx.accounts.token_data.decimals);
 
             let raw_supply = total_supply
-                .checked_mul(10u64.pow(decimals as u32))
+                .checked_mul(10u64.pow(ctx.accounts.token_data.decimals as u32))
                 .ok_or(ErrorCode::InvalidAmount)?;
-            
+
             msg!("Raw Supply: {}", raw_supply);
-            msg!("Minting to ATA address: {}", ctx.accounts.ata.key());
 
             mint_to(
                 CpiContext::new(
@@ -180,7 +162,6 @@ pub mod potter_potter {
         require!(!ctx.accounts.token_data.is_paused, ErrorCode::TokenPaused);
         require!(amount > 0, ErrorCode::InvalidAmount);
 
-        // whitelist check: ensure recipient owner is whitelisted
         require!(
             ctx.accounts
                 .whitelist
@@ -189,7 +170,11 @@ pub mod potter_potter {
             ErrorCode::AddressNotWhitelisted
         );
 
-        msg!("Transferring {} tokens", amount);
+        let raw_amount = amount
+            .checked_mul(10u64.pow(ctx.accounts.token_data.decimals as u32))
+            .ok_or(ErrorCode::InvalidAmount)?;
+
+        msg!("Transferring {} tokens (raw: {})", amount, raw_amount);
 
         transfer(
             CpiContext::new(
@@ -200,19 +185,22 @@ pub mod potter_potter {
                     authority: ctx.accounts.authority.to_account_info(),
                 },
             ),
-            amount,
+            raw_amount,
         )?;
-
-        msg!("Transferred {} tokens", amount);
 
         Ok(())
     }
-
     pub fn mint_tokens(ctx: Context<MintTokensCTX>, _token_count: u64, amount: u64) -> Result<()> {
         require!(
             !ctx.accounts.token_data.is_minting_paused,
             ErrorCode::MintingPaused
         );
+
+        let factor = 10u64
+            .checked_pow(ctx.accounts.token_data.decimals as u32)
+            .ok_or(ErrorCode::InvalidAmount)?;
+
+        let raw_amount = amount.checked_mul(factor).ok_or(ErrorCode::InvalidAmount)?;
 
         mint_to(
             CpiContext::new(
@@ -223,19 +211,23 @@ pub mod potter_potter {
                     authority: ctx.accounts.authority.to_account_info(),
                 },
             ),
-            amount,
+            raw_amount,
         )?;
 
         ctx.accounts.token_data.total_supply = ctx
             .accounts
             .token_data
             .total_supply
-            .checked_add(amount)
+            .checked_add(raw_amount)
             .unwrap();
         Ok(())
     }
 
     pub fn burn_tokens(ctx: Context<BurnTokensCTX>, _token_count: u64, amount: u64) -> Result<()> {
+        let raw_amount = amount
+            .checked_mul(10u64.pow(ctx.accounts.token_data.decimals as u32))
+            .ok_or(ErrorCode::InvalidAmount)?;
+
         burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -245,14 +237,14 @@ pub mod potter_potter {
                     authority: ctx.accounts.authority.to_account_info(),
                 },
             ),
-            amount,
+            raw_amount,
         )?;
 
         ctx.accounts.token_data.total_supply = ctx
             .accounts
             .token_data
             .total_supply
-            .checked_sub(amount)
+            .checked_sub(raw_amount)
             .unwrap();
         Ok(())
     }
@@ -320,12 +312,12 @@ pub struct CreateTokenCTX<'info> {
     pub whitelist: Account<'info, Whitelist>,
 
     #[account(
-        init,
-        payer = authority,
-        mint::decimals = decimals,
-        mint::authority = authority,
-        mint::freeze_authority = authority
-    )]
+    init,
+    payer = authority,
+    mint::decimals = 9,
+    mint::authority = mint_authority_pda,
+    mint::freeze_authority = mint_authority_pda
+)]
     pub mint: Account<'info, Mint>,
 
     /// CHECK: This is created via CPI to the associated token program and validated by the SPL token program.

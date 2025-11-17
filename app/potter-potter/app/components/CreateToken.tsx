@@ -108,9 +108,7 @@ export function CreateToken() {
       // --- ASSOCIATED TOKEN ACCOUNT ---
       const ata = getAssociatedTokenAddressSync(mint.publicKey, publicKey);
 
-      const rawSupply = new anchor.BN(totalSupply).mul(
-        new anchor.BN(1).pow(new anchor.BN(decimals)),
-      );
+      const rawSupply = new anchor.BN(totalSupply)
 
       const signers = [mint];
 
@@ -122,7 +120,7 @@ export function CreateToken() {
 
       // --- SEND TX ---
       const tx = await program.methods
-        .createToken(rawSupply, decimals, name, symbol, uri, defaultPk)
+        .createToken(rawSupply, name, symbol, uri, defaultPk)
         .accounts({
           factory,
           tokenData,
@@ -237,29 +235,6 @@ export function CreateToken() {
               an error on-chain. Please reduce total supply or decimals.
             </p>
           )}
-        </div>
-        <div className="mb-4">
-          <label
-            htmlFor="decimals"
-            className="block text-sm font-medium text-gray-300"
-          >
-            Decimals
-          </label>
-          <input
-            type="number"
-            id="decimals"
-            className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            value={decimals}
-            onChange={(e) => {
-              const value = Number(e.target.value);
-              if (!isNaN(value)) {
-                setDecimals(value);
-              }
-            }}
-            required
-            min="0"
-            max="9"
-          />
         </div>
         <div className="mb-4">
           <label

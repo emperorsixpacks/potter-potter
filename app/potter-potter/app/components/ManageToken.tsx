@@ -34,8 +34,6 @@ export function ManageToken({
 
   // Helper function to convert human-readable amount to raw amount (BN)
   const toRawAmount = (humanAmount: number, decimals: number): anchor.BN => {
-    // Scale the human-readable amount by 10^decimals and round to the nearest integer
-    // This handles potential floating point inaccuracies from user input (type="number")
     const scaledAmount = Math.round(humanAmount * Math.pow(10, decimals));
     return new anchor.BN(scaledAmount);
   };
@@ -43,8 +41,6 @@ export function ManageToken({
   // Helper function to convert raw amount (BN) to human-readable amount (number)
   const toHumanAmount = (rawAmount: anchor.BN, decimals: number): number => {
     const divisor = Math.pow(10, decimals);
-    // Perform division and convert to number for display
-    // rawAmount is an anchor.BN, so we need to convert it to a number for division
     return rawAmount.toNumber() / divisor;
   };
 
@@ -173,27 +169,32 @@ export function ManageToken({
     }
   };
 
-  const mintTokens = () =>
-    handleTransaction(async () => {
-      const toAccount = await getOrCreateAssociatedTokenAccount(publicKey!);
-      
-      // Convert amount with decimals
-      const amountWithDecimals = toRawAmount(amountToMint, token.decimals);
-
-      return program.methods
-        .mintTokens(
-          new anchor.BN(token.token_count),
-          amountWithDecimals
-        )
-        .accounts({
-          tokenData: token.tokenDataAddress,
-          mint: token.mint,
-          to: toAccount,
-          authority: publicKey!,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .transaction();
-    });
+const mintTokens = () =>
+  handleTransaction(async () => {
+    const toAccount = await getOrCreateAssociatedTokenAccount(publicKey!);
+    
+    console.log("Minting to ATA:", toAccount.toBase58());
+    console.log("Token Mint:", token.mint.toBase58());
+    console.log("User Public Key:", publicKey!.toBase58());
+    
+    // Convert amount with decimals
+    const amountWithDecimals = toRawAmount(amountToMint, token.decimals);
+    console.log("Amount to mint (raw):", amountWithDecimals.toString());
+    
+    return program.methods
+      .mintTokens(
+        new anchor.BN(token.token_count),
+        new anchor.BN(amountWithDecimals) 
+      )
+      .accounts({
+        tokenData: token.tokenDataAddress,
+        mint: token.mint,
+        to: toAccount,
+        authority: publicKey!,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .transaction();
+  });
 
   const burnTokens = () =>
     handleTransaction(async () => {

@@ -136,7 +136,7 @@ export function TokenList() {
             <p className="text-sm text-green-400 font-semibold">
               Your Balance: {
                 token.balance && !isNaN(parseFloat(token.balance))
-                  ? parseFloat(token.balance).toFixed(3)
+                  ? parseFloat(token.balance).toFixed(10)
                   : "0.000"
               }
             </p>
