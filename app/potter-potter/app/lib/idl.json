@@ -346,6 +346,10 @@
           "writable": true
         },
         {
+          "name": "metadata",
+          "writable": true
+        },
+        {
           "name": "authority",
           "relations": [
             "factory"
@@ -364,6 +368,13 @@
         {
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
           "name": "associated_token_program"
+        },
+        {
+          "address": "SysvarRent111111111111111111111111111111111",
+          "name": "rent"
+        },
+        {
+          "name": "token_metadata_program"
         }
       ],
       "args": [
@@ -401,12 +412,6 @@
         140,
         234,
         75
-      ],
-      "docs": [
-        "Create a new fungible SPL token under the factory.",
-        "- creates the mint",
-        "- creates the destination ATA for the authority (recipient)",
-        "- mints initial supply to the recipient ATA"
       ],
       "name": "create_token"
     },
@@ -585,6 +590,60 @@
         68
       ],
       "name": "pause_minting"
+    },
+    {
+      "accounts": [
+        {
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "token_data"
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        226,
+        150,
+        72,
+        211,
+        159,
+        51,
+        226,
+        39
+      ],
+      "name": "pause_token"
     },
     {
       "accounts": [
