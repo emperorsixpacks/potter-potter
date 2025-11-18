@@ -6,7 +6,7 @@ import { useAnchorProgram } from "../lib/useAnchorProgram";
 import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
-  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
 
 interface ManageTokenProps {
@@ -24,25 +24,13 @@ export function ManageToken({
   const { publicKey, sendTransaction } = useWallet();
   const [amountToMint, setAmountToMint] = useState(0);
   const [amountToBurn, setAmountToBurn] = useState(0);
-  const [amountToTransfer, setAmountToTransfer] = useState(0);
-  const [transferToAddress, setTransferToAddress] = useState("");
   const [addressesToWhitelist, setAddressesToWhitelist] = useState("");
+  const [addressesToRemove, setAddressesToRemove] = useState("");
+  const [newAuthority, setNewAuthority] = useState("");
   const [whitelist, setWhitelist] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
-
-  // Helper function to convert human-readable amount to raw amount (BN)
-  const toRawAmount = (humanAmount: number, decimals: number): anchor.BN => {
-    const scaledAmount = Math.round(humanAmount * Math.pow(10, decimals));
-    return new anchor.BN(scaledAmount);
-  };
-
-  // Helper function to convert raw amount (BN) to human-readable amount (number)
-  const toHumanAmount = (rawAmount: anchor.BN, decimals: number): number => {
-    const divisor = Math.pow(10, decimals);
-    return rawAmount.toNumber() / divisor;
-  };
 
   const getWhitelist = async () => {
     if (!program) return;
@@ -73,7 +61,9 @@ export function ManageToken({
 
     const associatedTokenAddress = await getAssociatedTokenAddress(
       token.mint,
-      owner
+      owner,
+      false,
+      TOKEN_2022_PROGRAM_ID
     );
 
     const account = await connection.getAccountInfo(associatedTokenAddress);
@@ -85,7 +75,8 @@ export function ManageToken({
           publicKey,
           associatedTokenAddress,
           owner,
-          token.mint
+          token.mint,
+          TOKEN_2022_PROGRAM_ID
         )
       );
       try {
@@ -93,7 +84,7 @@ export function ManageToken({
         console.log("ATA created successfully for:", owner.toBase58());
       } catch (e) {
         console.error("Error creating ATA for:", owner.toBase58(), e);
-        throw e; // Re-throw to be caught by handleTransaction
+        throw e;
       }
     }
 
@@ -116,7 +107,7 @@ export function ManageToken({
       const transaction = await buildTransaction();
       const txSignature = await sendTransaction(transaction, connection);
       setSignature(txSignature);
-      onTransactionSuccess(); // Refresh data on success
+      onTransactionSuccess();
     } catch (e: any) {
       console.error("Transaction Error (handleTransaction):", e);
       let errorMessage = e.message;
@@ -129,18 +120,19 @@ export function ManageToken({
           const customMatch = log.match(customErrorRegex);
           if (customMatch) {
             const errorCode = parseInt(customMatch[1], 16);
-            // Anchor custom errors start from 0x1770 (6000)
             const customErrorIndex = errorCode - 0x1770;
             switch (customErrorIndex) {
-              case 0: errorMessage = "Token transfers are currently paused."; break; // TokenPaused
-              case 1: errorMessage = "Invalid amount specified."; break; // InvalidAmount
-              case 2: errorMessage = "Unauthorized: only token authority can perform this action."; break; // Unauthorized
-              case 3: errorMessage = "Maximum supply exceeded."; break; // MaxSupplyExceeded
-              case 4: errorMessage = "Symbol name too long."; break; // SymbolTooLong
-              case 5: errorMessage = "Name too long."; break; // NameTooLong
-              case 6: errorMessage = "Address not whitelisted."; break; // AddressNotWhitelisted
-              case 7: errorMessage = "Minting is currently paused."; break; // MintingPaused
-              case 8: errorMessage = "Invalid metadata account."; break; // InvalidMetadataAccount
+              case 0: errorMessage = "Token transfers are currently paused."; break;
+              case 1: errorMessage = "Invalid amount specified."; break;
+              case 2: errorMessage = "Unauthorized: only token authority can perform this action."; break;
+              case 3: errorMessage = "Maximum supply exceeded."; break;
+              case 4: errorMessage = "Symbol name too long."; break;
+              case 5: errorMessage = "Name too long."; break;
+              case 6: errorMessage = "Address not whitelisted for transfers."; break;
+              case 7: errorMessage = "Minting is currently paused."; break;
+              case 8: errorMessage = "Invalid metadata account."; break;
+              case 9: errorMessage = "URI too long."; break;
+              case 10: errorMessage = "Is not currently transferring."; break;
               default: errorMessage = `Unknown custom program error: 0x${customMatch[1]}`;
             }
             break;
@@ -154,7 +146,6 @@ export function ManageToken({
         }
       }
 
-      // Fallback for common wallet errors
       if (e.message.includes("User rejected the request")) {
         errorMessage = "Transaction cancelled by user.";
       } else if (e.message.includes("insufficient funds")) {
@@ -169,78 +160,50 @@ export function ManageToken({
     }
   };
 
-const mintTokens = () =>
-  handleTransaction(async () => {
-    const toAccount = await getOrCreateAssociatedTokenAccount(publicKey!);
-    
-    console.log("Minting to ATA:", toAccount.toBase58());
-    console.log("Token Mint:", token.mint.toBase58());
-    console.log("User Public Key:", publicKey!.toBase58());
-    
-    // Convert amount with decimals
-    const amountWithDecimals = toRawAmount(amountToMint, token.decimals);
-    console.log("Amount to mint (raw):", amountWithDecimals.toString());
-    
-    return program.methods
-      .mintTokens(
-        new anchor.BN(token.token_count),
-        new anchor.BN(amountWithDecimals) 
-      )
-      .accounts({
-        tokenData: token.tokenDataAddress,
-        mint: token.mint,
-        to: toAccount,
-        authority: publicKey!,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .transaction();
-  });
+  const mintTokens = () =>
+    handleTransaction(async () => {
+      const toAccount = await getOrCreateAssociatedTokenAccount(publicKey!);
+      
+      const [mintAuthorityPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("mint_authority"), publicKey!.toBuffer()],
+        program.programId
+      );
+
+      console.log("Minting to ATA:", toAccount.toBase58());
+      console.log("Token Mint:", token.mint.toBase58());
+      console.log("Mint Authority PDA:", mintAuthorityPda.toBase58());
+      
+      return program.methods
+        .mintTokens(
+          new anchor.BN(token.token_count),
+          new anchor.BN(amountToMint)
+        )
+        .accounts({
+          tokenData: token.tokenDataAddress,
+          mint: token.mint,
+          to: toAccount,
+          mintAuthorityPda: mintAuthorityPda,
+          authority: publicKey!,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+        })
+        .transaction();
+    });
 
   const burnTokens = () =>
     handleTransaction(async () => {
       const fromAccount = await getOrCreateAssociatedTokenAccount(publicKey!);
-      
-      // Convert amount with decimals
-      const amountWithDecimals = toRawAmount(amountToBurn, token.decimals);
 
       return program.methods
         .burnTokens(
           new anchor.BN(token.token_count),
-          amountWithDecimals
+          new anchor.BN(amountToBurn)
         )
         .accounts({
           tokenData: token.tokenDataAddress,
           mint: token.mint,
           from: fromAccount,
           authority: publicKey!,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .transaction();
-    });
-
-  const transferTokens = () =>
-    handleTransaction(async () => {
-      const fromAccount = await getOrCreateAssociatedTokenAccount(publicKey!);
-      const toAccount = await getOrCreateAssociatedTokenAccount(
-        new PublicKey(transferToAddress)
-      );
-      
-      // Convert amount with decimals
-      const amountWithDecimals = toRawAmount(amountToTransfer, token.decimals);
-
-      return program.methods
-        .transferToken(
-          new anchor.BN(token.token_count),
-          amountWithDecimals
-        )
-        .accounts({
-          factoryAuthority: token.authority,
-          tokenData: token.tokenDataAddress,
-          whitelist: token.whitelist,
-          from: fromAccount,
-          to: toAccount,
-          authority: publicKey!,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
         })
         .transaction();
     });
@@ -263,10 +226,52 @@ const mintTokens = () =>
         .transaction();
     });
 
+  const removeFromWhitelist = () =>
+    handleTransaction(async () => {
+      return program.methods
+        .removeFromWhitelist(
+          new anchor.BN(token.token_count),
+          addressesToRemove
+            .split(",")
+            .map((address) => new PublicKey(address.trim()))
+        )
+        .accounts({
+          tokenData: token.tokenDataAddress,
+          whitelist: token.whitelist,
+          authority: publicKey!,
+        })
+        .transaction();
+    });
+
   const pauseMinting = () =>
     handleTransaction(async () => {
       return program.methods
         .pauseMinting(new anchor.BN(token.token_count))
+        .accounts({
+          tokenData: token.tokenDataAddress,
+          authority: publicKey!,
+        })
+        .transaction();
+    });
+
+  const pauseToken = () =>
+    handleTransaction(async () => {
+      return program.methods
+        .pauseToken(new anchor.BN(token.token_count))
+        .accounts({
+          tokenData: token.tokenDataAddress,
+          authority: publicKey!,
+        })
+        .transaction();
+    });
+
+  const transferAuthority = () =>
+    handleTransaction(async () => {
+      return program.methods
+        .transferAuthority(
+          new anchor.BN(token.token_count),
+          new PublicKey(newAuthority)
+        )
         .accounts({
           tokenData: token.tokenDataAddress,
           authority: publicKey!,
@@ -292,10 +297,16 @@ const mintTokens = () =>
           <strong>Decimals:</strong> {token.decimals}
         </p>
         <p className="text-gray-300 text-sm">
-          <strong>Total Supply:</strong> {token.total_supply ? toHumanAmount(token.total_supply, token.decimals).toLocaleString() : "Loading..."}
+          <strong>Total Supply:</strong> {token.total_supply ? token.total_supply.toString() : "Loading..."}
         </p>
         <p className="text-gray-300 text-sm">
           <strong>Minting:</strong> {token.is_minting_paused ? "Paused" : "Active"}
+        </p>
+        <p className="text-gray-300 text-sm">
+          <strong>Token Status:</strong> {token.is_paused ? "Paused" : "Active"}
+        </p>
+        <p className="text-gray-300 text-sm break-all">
+          <strong>Mint Address:</strong> {token.mint.toBase58()}
         </p>
       </div>
 
@@ -310,7 +321,7 @@ const mintTokens = () =>
             placeholder="Amount to mint"
             className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
           />
-          <p className="text-xs text-gray-400 mt-1">Human-readable amount</p>
+          <p className="text-xs text-gray-400 mt-1">Human-readable amount (without decimals)</p>
           <button
             onClick={mintTokens}
             disabled={isLoading || !program || !publicKey}
@@ -330,7 +341,7 @@ const mintTokens = () =>
             placeholder="Amount to burn"
             className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
           />
-          <p className="text-xs text-gray-400 mt-1">Human-readable amount</p>
+          <p className="text-xs text-gray-400 mt-1">Human-readable amount (without decimals)</p>
           <button
             onClick={burnTokens}
             disabled={isLoading || !program || !publicKey}
@@ -340,34 +351,7 @@ const mintTokens = () =>
           </button>
         </div>
 
-        {/* Transfer */}
-        <div className="md:col-span-2">
-          <h4 className="text-lg font-semibold text-white">Transfer Tokens</h4>
-          <input
-            type="number"
-            value={amountToTransfer}
-            onChange={(e) => setAmountToTransfer(Number(e.target.value))}
-            placeholder="Amount"
-            className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          />
-          <p className="text-xs text-gray-400 mt-1">Human-readable amount</p>
-          <input
-            type="text"
-            value={transferToAddress}
-            onChange={(e) => setTransferToAddress(e.target.value)}
-            placeholder="Recipient Address"
-            className="mt-2 block w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          />
-          <button
-            onClick={transferTokens}
-            disabled={isLoading || !program || !publicKey}
-            className="mt-2 w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Transfer
-          </button>
-        </div>
-
-        {/* Whitelist */}
+        {/* Add to Whitelist */}
         <div className="md:col-span-2">
           <h4 className="text-lg font-semibold text-white">Add to Whitelist</h4>
           <textarea
@@ -386,15 +370,65 @@ const mintTokens = () =>
           </button>
         </div>
 
-        {/* Pause Minting */}
+        {/* Remove from Whitelist */}
         <div className="md:col-span-2">
-          <h4 className="text-lg font-semibold text-white">Pause/Resume Minting</h4>
+          <h4 className="text-lg font-semibold text-white">Remove from Whitelist</h4>
+          <textarea
+            value={addressesToRemove}
+            onChange={(e) => setAddressesToRemove(e.target.value)}
+            placeholder="Enter addresses to remove, separated by commas"
+            className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            rows={3}
+          />
+          <button
+            onClick={removeFromWhitelist}
+            disabled={isLoading || !program || !publicKey}
+            className="mt-2 w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Remove from Whitelist
+          </button>
+        </div>
+
+        {/* Pause Minting */}
+        <div>
+          <h4 className="text-lg font-semibold text-white">Minting Control</h4>
           <button
             onClick={pauseMinting}
             disabled={isLoading || !program || !publicKey}
             className="mt-2 w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {token.is_minting_paused ? "Resume Minting" : "Pause Minting"}
+          </button>
+        </div>
+
+        {/* Pause Token */}
+        <div>
+          <h4 className="text-lg font-semibold text-white">Token Control</h4>
+          <button
+            onClick={pauseToken}
+            disabled={isLoading || !program || !publicKey}
+            className="mt-2 w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-pink-600 hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {token.is_paused ? "Resume Token" : "Pause Token"}
+          </button>
+        </div>
+
+        {/* Transfer Authority */}
+        <div className="md:col-span-2">
+          <h4 className="text-lg font-semibold text-white">Transfer Authority</h4>
+          <input
+            type="text"
+            value={newAuthority}
+            onChange={(e) => setNewAuthority(e.target.value)}
+            placeholder="New authority public key"
+            className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          />
+          <button
+            onClick={transferAuthority}
+            disabled={isLoading || !program || !publicKey}
+            className="mt-2 w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-800 hover:bg-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Transfer Authority (Careful!)
           </button>
         </div>
       </div>

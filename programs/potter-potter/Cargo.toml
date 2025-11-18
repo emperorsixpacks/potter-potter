@@ -22,6 +22,9 @@ custom-heap = []
 anchor-lang =  "0.32.1"
 anchor-spl = "0.32.1"
 mpl-token-metadata = "5.1.1"
+spl-discriminator = "0.5.1"
+spl-tlv-account-resolution = "0.11.1"
+spl-transfer-hook-interface = "2.1.0"
 [profile.release]
 opt-level = "z"
 lto = "fat"

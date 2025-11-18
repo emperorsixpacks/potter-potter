@@ -44,23 +44,48 @@
   "errors": [
     {
       "code": 6000,
-      "msg": "Invalid amount or length",
-      "name": "InvalidAmount"
+      "msg": "Name is too long (max 32 characters)",
+      "name": "NameTooLong"
     },
     {
       "code": 6001,
-      "msg": "Token is paused",
-      "name": "TokenPaused"
+      "msg": "Symbol is too long (max 10 characters)",
+      "name": "SymbolTooLong"
     },
     {
       "code": 6002,
-      "msg": "Minting is paused",
-      "name": "MintingPaused"
+      "msg": "URI is too long (max 200 characters)",
+      "name": "UriTooLong"
     },
     {
       "code": 6003,
-      "msg": "Address not whitelisted",
+      "msg": "Invalid amount",
+      "name": "InvalidAmount"
+    },
+    {
+      "code": 6004,
+      "msg": "Token transfers are paused",
+      "name": "TokenPaused"
+    },
+    {
+      "code": 6005,
+      "msg": "Token minting is paused",
+      "name": "MintingPaused"
+    },
+    {
+      "code": 6006,
+      "msg": "Address is not whitelisted",
       "name": "AddressNotWhitelisted"
+    },
+    {
+      "code": 6007,
+      "msg": "Transfer hook error: not currently transferring",
+      "name": "IsNotCurrentlyTransferring"
+    },
+    {
+      "code": 6008,
+      "msg": "Unauthorized",
+      "name": "Unauthorized"
     }
   ],
   "instructions": [
@@ -177,7 +202,6 @@
           "signer": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
           "name": "token_program"
         }
       ],
@@ -342,6 +366,36 @@
           "writable": true
         },
         {
+          "name": "mint_authority_pda",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
           "name": "ata",
           "writable": true
         },
@@ -457,7 +511,6 @@
           "name": "system_program"
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
           "name": "token_program"
         },
         {
@@ -469,6 +522,7 @@
           "name": "rent"
         },
         {
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
           "name": "token_metadata_program"
         }
       ],
@@ -476,10 +530,6 @@
         {
           "name": "total_supply",
           "type": "u64"
-        },
-        {
-          "name": "decimals",
-          "type": "u8"
         },
         {
           "name": "name",
@@ -565,6 +615,107 @@
     {
       "accounts": [
         {
+          "name": "payer",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "extra_account_meta_list",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          },
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "authority"
+        },
+        {
+          "name": "whitelist",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  104,
+                  105,
+                  116,
+                  101,
+                  108,
+                  105,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          }
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        }
+      ],
+      "discriminator": [
+        43,
+        34,
+        13,
+        49,
+        167,
+        88,
+        235,
+        235
+      ],
+      "name": "initialize_extra_account_meta_list"
+    },
+    {
+      "accounts": [
+        {
           "name": "token_data",
           "pda": {
             "seeds": [
@@ -599,6 +750,36 @@
           "writable": true
         },
         {
+          "name": "mint_authority_pda",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
           "name": "authority",
           "relations": [
             "token_data"
@@ -606,7 +787,6 @@
           "signer": true
         },
         {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
           "name": "token_program"
         }
       ],
@@ -743,8 +923,70 @@
     {
       "accounts": [
         {
-          "name": "factory_authority"
+          "name": "token_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "arg",
+                "path": "token_count"
+              }
+            ]
+          },
+          "writable": true
         },
+        {
+          "name": "whitelist",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "token_data"
+          ],
+          "signer": true,
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "_token_count",
+          "type": "u64"
+        },
+        {
+          "name": "addresses",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ],
+      "discriminator": [
+        7,
+        144,
+        216,
+        239,
+        243,
+        236,
+        193,
+        235
+      ],
+      "name": "remove_from_whitelist"
+    },
+    {
+      "accounts": [
         {
           "name": "token_data",
           "pda": {
@@ -761,33 +1003,22 @@
               },
               {
                 "kind": "account",
-                "path": "factory_authority"
+                "path": "authority"
               },
               {
                 "kind": "arg",
                 "path": "token_count"
               }
             ]
-          }
-        },
-        {
-          "name": "whitelist"
-        },
-        {
-          "name": "from",
-          "writable": true
-        },
-        {
-          "name": "to",
+          },
           "writable": true
         },
         {
           "name": "authority",
+          "relations": [
+            "token_data"
+          ],
           "signer": true
-        },
-        {
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-          "name": "token_program"
         }
       ],
       "args": [
@@ -796,21 +1027,92 @@
           "type": "u64"
         },
         {
-          "name": "amount",
+          "name": "new_authority",
+          "type": "pubkey"
+        }
+      ],
+      "discriminator": [
+        48,
+        169,
+        76,
+        72,
+        229,
+        180,
+        55,
+        161
+      ],
+      "name": "transfer_authority"
+    },
+    {
+      "accounts": [
+        {
+          "name": "source_token"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "destination_token"
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "extra_account_meta_list",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "whitelist"
+        }
+      ],
+      "args": [
+        {
+          "name": "_amount",
           "type": "u64"
         }
       ],
       "discriminator": [
-        219,
-        17,
-        122,
-        53,
-        237,
-        171,
-        232,
-        222
+        105,
+        37,
+        101,
+        197,
+        75,
+        251,
+        102,
+        26
       ],
-      "name": "transfer_token"
+      "name": "transfer_hook"
     }
   ],
   "metadata": {
